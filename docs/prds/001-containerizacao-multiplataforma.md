@@ -1,6 +1,6 @@
 ---
 prd_number: "001"
-status: rascunho
+status: concluido
 priority: alta
 created: 2026-07-26
 issue: ""
@@ -14,6 +14,10 @@ references:
 ---
 
 # PRD 001: Containerização e publicação multiplataforma do kube-news
+
+> **Situação em 2026-07-26 — CONCLUÍDO.** 12 de 12 critérios de aceite verificados pela mudança
+> `containerizacao-infra-e-deploy`. Imagem publicada: `fabricioveronez/kube-news:v1.0.0`
+> (`linux/amd64` + `linux/arm64`). Evidências em `openspec/changes/containerizacao-infra-e-deploy/evidencias/relatorio-final.md`.
 
 ## 1. Contexto
 
@@ -162,13 +166,13 @@ Quer usar a aplicação localmente?
 **Funcionalidades:** US01, US03
 
 **Checklist de aceite** (marcado pelo Aprovador após a implementação):
-- [ ] Um único comando, a partir de clone limpo, sobe aplicação e banco sem configuração manual
-- [ ] A página inicial responde com sucesso a partir da máquina do usuário
-- [ ] Todos os recursos estáticos respondem com sucesso e com o tipo de conteúdo correto
-- [ ] Um registro criado pela API é confirmado direto no banco
-- [ ] O registro sobrevive a parar e subir o ambiente
-- [ ] O contador de reinícios do container é zero após 30 segundos
-- [ ] A parada do ambiente retorna em menos de 10 segundos
+- [x] Um único comando, a partir de clone limpo, sobe aplicação e banco sem configuração manual
+- [x] A página inicial responde com sucesso a partir da máquina do usuário
+- [x] Todos os recursos estáticos respondem com sucesso e com o tipo de conteúdo correto
+- [x] Um registro criado pela API é confirmado direto no banco
+- [x] O registro sobrevive a parar e subir o ambiente
+- [x] O contador de reinícios do container é zero após 30 segundos
+- [x] A parada do ambiente retorna em menos de 10 segundos
 
 **Aprovador:** Fabricio
 
@@ -179,11 +183,11 @@ Quer usar a aplicação localmente?
 **Funcionalidades:** US02
 
 **Checklist de aceite** (marcado pelo Aprovador após a implementação):
-- [ ] O manifesto publicado atende às duas arquiteturas sob a mesma referência de versão
-- [ ] Consumir a imagem não exige credencial
-- [ ] O processo dentro do container não roda como administrador
-- [ ] Nenhum segredo, histórico de versionamento ou dependência local está presente na imagem
-- [ ] A identificação de versão publicada não reaproveita nenhuma anterior
+- [x] O manifesto publicado atende às duas arquiteturas sob a mesma referência de versão
+- [x] Consumir a imagem não exige credencial
+- [x] O processo dentro do container não roda como administrador
+- [x] Nenhum segredo, histórico de versionamento ou dependência local está presente na imagem
+- [x] A identificação de versão publicada não reaproveita nenhuma anterior
 
 **Aprovador:** Fabricio
 

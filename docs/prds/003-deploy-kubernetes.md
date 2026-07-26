@@ -1,6 +1,6 @@
 ---
 prd_number: "003"
-status: rascunho
+status: concluido-com-ressalva
 priority: alta
 created: 2026-07-26
 issue: ""
@@ -14,6 +14,12 @@ references:
 ---
 
 # PRD 003: Manifesto Kubernetes da aplicação, validado em cluster local
+
+> **Situação em 2026-07-26 — CONCLUÍDO COM RESSALVA.** 11 de 12 critérios verificados pela mudança
+> `containerizacao-infra-e-deploy`, num cluster `kind` local na mesma versão menor do EKS de destino.
+> O critério de resposta pela exposição externa ficou **NÃO VERIFICADO**: por decisão do
+> responsável, a validação local é por `kubectl port-forward` e o `EXTERNAL-IP` segue `<pending>`.
+> O manifesto **não** foi adaptado para contornar — segue `type: LoadBalancer`. Evidências em `openspec/changes/containerizacao-infra-e-deploy/evidencias/relatorio-final.md`.
 
 ## 1. Contexto
 
@@ -204,18 +210,19 @@ Aplicação acessível pelo navegador (US02) ──▶ manifesto provado (US05)
 **Funcionalidades:** US01, US02, US05, US06
 
 **Checklist de aceite** (marcado pelo Aprovador após a implementação):
-- [ ] Um comando sobe o cluster local a partir da configuração versionada
-- [ ] A versão de Kubernetes do cluster local é a mesma da versão de destino na nuvem
-- [ ] Um comando aplica todo o deploy, criando os objetos na ordem correta
-- [ ] O contador de reinícios é zero cinco minutos após o deploy
-- [ ] Nenhum componente está na classe de serviço de menor prioridade
-- [ ] A lista de destinos de cada exposição é não-vazia
-- [ ] Um registro criado pela API é confirmado consultando o banco diretamente
-- [ ] A aplicação responde pelo navegador através da exposição externa
-- [ ] O manifesto aplicado é idêntico ao versionado, exceto pela injeção da senha
-- [ ] O arquivo versionado contém apenas o marcador de senha
-- [ ] As duas verificações de saúde apontam para destinos diferentes, e a que reinicia não consulta o banco
-- [ ] Os dados de teste foram removidos ao final
+- [x] Um comando sobe o cluster local a partir da configuração versionada
+- [x] A versão de Kubernetes do cluster local é a mesma da versão de destino na nuvem
+- [x] Um comando aplica todo o deploy, criando os objetos na ordem correta
+- [x] O contador de reinícios é zero cinco minutos após o deploy
+- [x] Nenhum componente está na classe de serviço de menor prioridade
+- [x] A lista de destinos de cada exposição é não-vazia
+- [x] Um registro criado pela API é confirmado consultando o banco diretamente
+- [ ] A aplicação responde pelo navegador através da exposição externa  
+      **NÃO VERIFICADO** — por decisão do responsável, `cloud-provider-kind` foi dispensado e a validação local passou a ser por `kubectl port-forward`, com o `EXTERNAL-IP` permanecendo `<pending>`. A aplicação responde por port-forward em `/`, `/health`, `/ready`, nos estáticos e em `POST /api/post` — o que prova aplicação, Service e seletor, mas **não** a atribuição de endereço externo. O manifesto **não** foi alterado: segue `type: LoadBalancer`, e o critério fecha no EKS.
+- [x] O manifesto aplicado é idêntico ao versionado, exceto pela injeção da senha
+- [x] O arquivo versionado contém apenas o marcador de senha
+- [x] As duas verificações de saúde apontam para destinos diferentes, e a que reinicia não consulta o banco
+- [x] Os dados de teste foram removidos ao final
 
 **Aprovador:** Fabricio
 

@@ -17,7 +17,9 @@ cd src && npm start       # sobe em http://localhost:8080
 
 Não há suíte de testes (`npm test` sai com erro por design). Validação é comportamental: subir a aplicação e exercitar os endpoints. Para popular o banco, use `popula-dados.http` (`POST /api/post` com `{"artigos": [...]}`).
 
-Build de imagem para o EKS **exige** `--platform linux/amd64` — a máquina de build é arm64 e os nodes são amd64. Sem a flag o build, o push e o apply passam, e o pod quebra no cluster com `exec format error`.
+A imagem publicada é **multiplataforma** (`linux/amd64` + `linux/arm64` sob a mesma tag), construída e publicada com `docker buildx build --platform linux/amd64,linux/arm64 --push`. Não existe flag de plataforma a lembrar no build: a classe de falha de arquitetura foi eliminada por construção, não prevenida por disciplina. O procedimento completo está no runbook, Passos 1 e 2.
+
+A tag `v1`, anterior a essa mudança, é **amd64 apenas** — o `exec format error` ainda acontece com ela em node arm64. O manifesto aponta para `v1.0.0`.
 
 ## Contrato da aplicação
 
@@ -52,6 +54,7 @@ Onde cada tipo de artefato mora. Respeite esses destinos ao criar arquivo novo �
 /
 ├── src/          # aplicação Node/Express (o package.json vive aqui, não na raiz)
 ├── k8s/          # manifestos Kubernetes
+├── kind/         # configuração do cluster local de validação do manifesto
 ├── terraform/    # projeto Terraform — modules/ e environments/
 ├── docs/
 │   ├── prds/     # PRDs (documentos de requisito de produto)
@@ -93,9 +96,20 @@ Convenções que ele estabelece e que valem para mudanças futuras:
 
 ## Estado do working tree
 
-`Dockerfile`, `.dockerignore`, `docker-compose.yml`, `k8s/` e `terraform/` existem em `HEAD` mas estão **deletados no working tree** — o repositório é refeito por etapa da imersão. Antes de criar qualquer um deles do zero, cheque o que já foi escrito: `git show HEAD:Dockerfile`, `git show HEAD:k8s/kube-news.yaml`, `git show HEAD:terraform/environments/dev/main.tf`. As versões em `HEAD` já seguem as skills e o runbook.
+`Dockerfile`, `.dockerignore`, `docker-compose.yml`, `k8s/kube-news.yaml`, `kind/kind-config.yaml` e `terraform/` existem no working tree, escritos pela mudança `containerizacao-infra-e-deploy`. Eles **não** estão em `HEAD` — o commit `3be1545` removeu os artefatos de infra, e o repositório é refeito por etapa da imersão.
 
-`docs/prds/` ainda não existe em lugar nenhum — nem no working tree, nem em `HEAD`. Crie o diretório ao escrever o primeiro PRD.
+Versões anteriores desses arquivos continuam recuperáveis do histórico, e é onde olhar antes de reescrever qualquer um do zero: `git show 72fd741:Dockerfile`, `git show 72fd741:docker-compose.yml`, `git show b2ff069:k8s/kube-news.yaml`. Elas já seguiam as skills e o runbook, mas trazem versões defasadas (Node 22, Postgres 16, tag `v1` de arquitetura única).
+
+`docs/prds/` já existe, com os três PRDs da imersão.
+
+## Ambiente de validação do manifesto
+
+`k8s/kube-news.yaml` é validado num cluster **kind local**, não na nuvem — `kind/kind-config.yaml` é versionado e fixa `kindest/node:v1.36.1`, a mesma versão menor do EKS de destino (`cluster_version = "1.36"`). O ciclo criar / aplicar / verificar / remover roda em poucos minutos, sem conta em nuvem e sem custo.
+
+Duas regras desse ambiente:
+
+- **O manifesto não é adaptado para o teste passar.** O Service continua `type: LoadBalancer`; quem ganha a capacidade que falta é o ambiente, via `cloud-provider-kind` (que exige `sudo` no macOS). Trocar o tipo do Service validaria um artefato diferente do entregue, e a falha reapareceria só na nuvem.
+- **Os nós do kind são arm64.** A validação local exercita justamente a variante de arquitetura que o EKS nunca usa — o que só é possível porque a imagem é multiplataforma.
 
 ## MCP
 

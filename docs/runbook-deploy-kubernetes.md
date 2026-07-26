@@ -72,30 +72,40 @@ aws eks update-kubeconfig --region us-east-1 --name kube-news-dev
 
 ## Procedimento de deploy
 
-### Passo 1 — Build da imagem
+### Passos 1 e 2 — Build multiplataforma e push, num comando só
+
+A imagem atende `linux/amd64` e `linux/arm64` sob a **mesma** tag. Build e push são a mesma operação: o armazenamento local de imagens do Docker não guarda índice multiplataforma, então a saída do buildx vai direto para o registry.
 
 ```bash
-docker build --platform linux/amd64 -t fabricioveronez/kube-news:v1 .
+# Uma vez por máquina — o builder padrão não atende múltiplas arquiteturas
+docker buildx create --name kube-news-multiarch --driver docker-container --bootstrap
+
+docker login
+
+docker buildx build \
+  --builder kube-news-multiarch \
+  --platform linux/amd64,linux/arm64 \
+  --tag fabricioveronez/kube-news:v1.0.0 \
+  --provenance=false \
+  --push \
+  .
 ```
 
-**O `--platform linux/amd64` não é opcional.** A máquina de build é arm64 e os nodes do EKS são amd64. Sem a flag, o build passa, o push passa, o `kubectl apply` passa — e o pod quebra no cluster com `exec format error`. Ver [Problema 1](#problema-1--exec-format-error-no-pod).
+**Não existe mais flag de plataforma para esquecer.** Cada arquitetura é construída por inteiro e independentemente — o `npm ci` roda dentro de cada uma, e nada é copiado de uma para a outra. Se a construção falhar em qualquer arquitetura, nada é publicado.
 
-Confira antes de gastar tempo com push:
+Confirme que as duas arquiteturas estão sob a mesma referência:
 
 ```bash
-docker image inspect fabricioveronez/kube-news:v1 --format 'Arch: {{.Architecture}} | OS: {{.Os}}'
-# esperado: Arch: amd64 | OS: linux
+docker buildx imagetools inspect fabricioveronez/kube-news:v1.0.0
+# esperado: MediaType application/vnd.oci.image.index.v1+json
+#           com duas entradas, Platform: linux/amd64 e Platform: linux/arm64
 ```
 
-### Passo 2 — Push para o registry
+Anote o digest do índice — ele é a identidade real do que subiu; a tag é convenção, o digest é garantia.
 
-```bash
-docker push fabricioveronez/kube-news:v1
-```
+> **Sobre a tag:** tag publicada nunca é reaproveitada. Versão nova → tag nova, e a label `app.kubernetes.io/version` do manifesto acompanha (mas nunca entra no selector, que é imutável). `latest`, ou qualquer tag cujo conteúdo mude sem o nome mudar, não é usada aqui: com ela, pods do mesmo Deployment passariam a poder executar códigos distintos, e um rollback apontaria para o mesmo conteúdo defeituoso.
 
-Anote o digest da saída (`v1: digest: sha256:...`). Ele é a identidade real do que subiu — a tag é uma convenção, o digest é a garantia.
-
-> **Sobre a tag:** `v1` é fixa por convenção, mas nada impede alguém de sobrescrevê-la no registry. Em produção, prefira tag derivada do build (SHA do commit, versão semântica) ou fixe o digest no manifesto: `image: fabricioveronez/kube-news@sha256:...`.
+> **Atenção:** a tag `v1`, publicada antes desta mudança, é **amd64 apenas**. Qualquer coisa que ainda aponte para ela continua sujeita ao `exec format error` em node arm64. Use `v1.0.0` ou posterior.
 
 ### Passo 3 — Apply dos manifestos
 
@@ -200,28 +210,25 @@ Esta é a fonte da verdade. Quando o teste HTTP e o banco discordam, o banco est
 
 ## Problemas conhecidos
 
-### Problema 1 — `exec format error` no pod
+### Problema 1 — `exec format error` no pod — **RESOLVIDO POR CONSTRUÇÃO**
+
+> **Estado:** este problema deixou de existir a partir de `fabricioveronez/kube-news:v1.0.0`. A imagem é multiplataforma, e a arquitetura correta não depende mais de ninguém digitar uma flag. A seção fica registrada porque o sintoma continua acontecendo com imagens antigas de tag única — inclusive com a `v1` deste mesmo repositório.
 
 **Sintoma:** pod em `CrashLoopBackOff`. Log do container: `exec /usr/local/bin/docker-entrypoint.sh: exec format error` ou equivalente.
 
-**Causa:** a imagem foi buildada em arm64 (Apple Silicon) e os nodes são amd64. Nada nas etapas anteriores reclama — build, push e apply funcionam normalmente. O erro só aparece quando o kernel do node tenta executar o binário.
+**Causa:** a imagem foi buildada em arm64 (Apple Silicon) e os nodes são amd64. Nada nas etapas anteriores reclama — build, push e apply funcionam normalmente. O erro só aparece quando o kernel do node tenta executar o binário, **três passos depois da causa**.
 
 **Diagnóstico:**
 
 ```bash
-docker image inspect fabricioveronez/kube-news:v1 --format '{{.Architecture}}'   # arm64 = errado
+# Uma imagem multiplataforma lista as duas arquiteturas; uma imagem antiga lista uma só
+docker buildx imagetools inspect fabricioveronez/kube-news:<tag>
 kubectl get nodes -o custom-columns='NODE:.metadata.name,ARCH:.status.nodeInfo.architecture'
 ```
 
-**Correção:**
+**Correção:** republicar a versão como imagem multiplataforma, pelo procedimento dos Passos 1 e 2, e apontar o manifesto para a nova tag.
 
-```bash
-docker build --platform linux/amd64 -t fabricioveronez/kube-news:v1 .
-docker push fabricioveronez/kube-news:v1
-kubectl rollout restart deployment/kube-news -n kube-news
-```
-
-**Prevenção:** conferir `docker image inspect ... --format '{{.Architecture}}'` antes de todo push. Custa um segundo e evita um debug que começa três passos depois da causa.
+**Por que não é mais prevenção, e sim eliminação.** A correção anterior era disciplina: conferir a arquitetura antes de todo push. Disciplina falha exatamente no dia em que alguém está com pressa, e a falha aparece longe da causa. Construir as duas arquiteturas sob a mesma referência tira a decisão do caminho — não há flag para esquecer, e se qualquer arquitetura falhar na construção, nada é publicado.
 
 ---
 
@@ -249,7 +256,7 @@ O Postgres e a aplicação sobem em paralelo; a aplicação chega primeiro, não
 ```yaml
 initContainers:
   - name: wait-postgres
-    image: postgres:16-alpine     # pg_isready já vem na imagem
+    image: postgres:18-alpine     # pg_isready já vem na imagem
     command:
       - sh
       - -c
@@ -398,7 +405,10 @@ kubectl rollout restart deployment/kube-news -n kube-news
 
 ```bash
 docker login
-docker push fabricioveronez/kube-news:v1
+# O push acontece dentro do buildx; refaça o comando dos Passos 1 e 2
+docker buildx build --builder kube-news-multiarch \
+  --platform linux/amd64,linux/arm64 \
+  --tag fabricioveronez/kube-news:v1.0.0 --provenance=false --push .
 ```
 
 O login é interativo e não pode ser automatizado num runbook. Se estiver rodando em pipeline, use um token de acesso do Docker Hub em vez da senha da conta.
@@ -412,14 +422,21 @@ O login é interativo e não pode ser automatizado num runbook. Se estiver rodan
 Nunca reaproveite a tag. Tag nova por release:
 
 ```bash
-TAG=v2
-docker build --platform linux/amd64 -t fabricioveronez/kube-news:$TAG .
-docker image inspect fabricioveronez/kube-news:$TAG --format '{{.Architecture}}'   # amd64
-docker push fabricioveronez/kube-news:$TAG
+TAG=v1.1.0
+docker buildx build \
+  --builder kube-news-multiarch \
+  --platform linux/amd64,linux/arm64 \
+  --tag fabricioveronez/kube-news:$TAG \
+  --provenance=false \
+  --push \
+  .
+
+# Confirme que a nova tag traz as duas arquiteturas antes de apontar o manifesto
+docker buildx imagetools inspect fabricioveronez/kube-news:$TAG
 
 # Atualize a imagem E a label de versão no manifesto (k8s/kube-news.yaml):
-#   image: fabricioveronez/kube-news:v2
-#   app.kubernetes.io/version: "v2"   (em metadata.labels e template.metadata.labels)
+#   image: fabricioveronez/kube-news:v1.1.0
+#   app.kubernetes.io/version: "v1.1.0"   (em metadata.labels e template.metadata.labels)
 # A label de version NÃO entra no selector — selector é imutável.
 
 export DB_PASSWORD='...'

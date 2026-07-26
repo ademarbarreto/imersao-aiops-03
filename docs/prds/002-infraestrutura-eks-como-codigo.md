@@ -1,6 +1,6 @@
 ---
 prd_number: "002"
-status: rascunho
+status: em-andamento
 priority: alta
 created: 2026-07-26
 issue: ""
@@ -13,6 +13,12 @@ references:
 ---
 
 # PRD 002: Provisionamento do cluster EKS como código
+
+> **Situação em 2026-07-26 — NÃO CONCLUÍDO.** A mudança `containerizacao-infra-e-deploy` entregou o
+> código de infraestrutura escrito, formatado, validado e planejado, mas **`terraform apply` e
+> `terraform destroy` não foram executados** — nenhum recurso existe na nuvem, por decisão de custo.
+> **4 de 11** critérios de aceite foram verificados (os estáticos); os outros **7 permanecem NÃO
+> VERIFICADOS**, cada um anotado no próprio item. Evidências em `openspec/changes/containerizacao-infra-e-deploy/evidencias/relatorio-final.md`.
 
 ## 1. Contexto
 
@@ -158,14 +164,18 @@ Laboratório encerrado?
 **Funcionalidades:** US01, US02
 
 **Checklist de aceite** (marcado pelo Aprovador após a implementação):
-- [ ] A criação a partir de clone limpo entrega dois nodes em estado pronto, sem passo manual no console
-- [ ] Nenhum node possui endereço alcançável a partir da internet
-- [ ] As áreas públicas de rede carregam a marcação de descoberta de serviço externo
-- [ ] A versão do Kubernetes está dentro do suporte padrão do provedor
-- [ ] Nenhum bloco reutilizável referencia origem externa ao repositório
-- [ ] Nenhuma definição de ambiente contém recurso solto
-- [ ] O estado e os arquivos locais gerados não estão no controle de versão; o arquivo de versões resolvidas está
-- [ ] Formatação e validação passam sem apontamentos
+- [ ] A criação a partir de clone limpo entrega dois nodes em estado pronto, sem passo manual no console  
+      **NÃO VERIFICADO** — infraestrutura não provisionada por decisão de custo (`terraform apply` e `destroy` fora do escopo desta rodada). O plano declara `desired_size = 2`.
+- [ ] Nenhum node possui endereço alcançável a partir da internet  
+      **NÃO VERIFICADO** — infraestrutura não provisionada por decisão de custo (`terraform apply` e `destroy` fora do escopo desta rodada). O plano traz `subnet_ids` do node group como *known after apply*, então nem o plano prova onde os nós caem — só a ligação no código (`node_subnet_ids = module.network.private_subnet_ids`) e o `map_public_ip_on_launch = false` das privadas.
+- [ ] As áreas públicas de rede carregam a marcação de descoberta de serviço externo  
+      **NÃO VERIFICADO** — infraestrutura não provisionada por decisão de custo (`terraform apply` e `destroy` fora do escopo desta rodada). As marcações `kubernetes.io/role/elb` e `internal-elb` estão no plano, mas a **eficácia** — o balanceador de fato recebendo endereço — só se prova provisionando.
+- [ ] A versão do Kubernetes está dentro do suporte padrão do provedor  
+      **NÃO VERIFICADO** — infraestrutura não provisionada por decisão de custo (`terraform apply` e `destroy` fora do escopo desta rodada). O plano declara `1.36`, dentro do suporte padrão em 2026-07-26; a versão *provisionada* não existe.
+- [x] Nenhum bloco reutilizável referencia origem externa ao repositório
+- [x] Nenhuma definição de ambiente contém recurso solto
+- [x] O estado e os arquivos locais gerados não estão no controle de versão; o arquivo de versões resolvidas está
+- [x] Formatação e validação passam sem apontamentos
 
 **Aprovador:** Fabricio
 
@@ -176,9 +186,12 @@ Laboratório encerrado?
 **Funcionalidades:** US03
 
 **Checklist de aceite** (marcado pelo Aprovador após a implementação):
-- [ ] O procedimento de remoção está documentado com seus pré-requisitos explícitos
-- [ ] Após a remoção, nenhum componente cobrado permanece ativo
-- [ ] O pré-requisito de remover primeiro o que o cluster criou por conta própria está registrado e foi exercitado ao menos uma vez
+- [ ] O procedimento de remoção está documentado com seus pré-requisitos explícitos  
+      **NÃO VERIFICADO** — documentado no runbook e na ADR 004, incluindo o pré-requisito de remover o Service antes do `destroy` — mas **nunca exercitado**.
+- [ ] Após a remoção, nenhum componente cobrado permanece ativo  
+      **NÃO VERIFICADO** — infraestrutura não provisionada por decisão de custo (`terraform apply` e `destroy` fora do escopo desta rodada). Nada foi criado, logo nada foi removido.
+- [ ] O pré-requisito de remover primeiro o que o cluster criou por conta própria está registrado e foi exercitado ao menos uma vez  
+      **NÃO VERIFICADO** — registrado, mas **não exercitado** — que é justamente a metade que falta do critério.
 
 **Aprovador:** Fabricio
 

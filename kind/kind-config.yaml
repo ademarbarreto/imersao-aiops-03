@@ -1,0 +1,21 @@
+# Cluster local de validação do manifesto (D7).
+#
+# A imagem de nó fixa a MESMA versão menor do EKS de destino (terraform/modules/eks
+# → cluster_version = "1.36"). Validar em versão diferente da de destino enfraquece
+# a validação sem economizar nada.
+#
+# Os nós do kind são containers nesta máquina, de arquitetura arm64 — a validação
+# exercita justamente a variante que o ambiente de nuvem nunca usaria, e que a
+# imagem multiplataforma passou a cobrir.
+#
+# Service type: LoadBalancer NÃO recebe endereço aqui sem `cloud-provider-kind`
+# rodando. O manifesto NÃO é alterado para contornar isso — é o ambiente de teste
+# que ganha a capacidade que lhe falta.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kube-news
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.1
+  - role: worker
+    image: kindest/node:v1.36.1

@@ -1,0 +1,73 @@
+name: kube-news
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Tag local distinta da publicada (D2): a construção local nunca
+    # sobrescreve fabricioveronez/kube-news:v1.0.0 no cache da máquina.
+    image: kube-news:local
+    restart: unless-stopped
+    environment:
+      # Única variável que muda em relação ao default do código:
+      # localhost vira o nome do serviço na rede do compose.
+      DB_HOST: db
+      # As demais herdam exatamente os defaults de src/models/post.js:8-13.
+      DB_PORT: "${DB_PORT:-5432}"
+      DB_DATABASE: "${DB_DATABASE:-kubedevnews}"
+      DB_USERNAME: "${DB_USERNAME:-kubedevnews}"
+      DB_PASSWORD: "${DB_PASSWORD:-Pg#123}"
+      DB_SSL_REQUIRE: "${DB_SSL_REQUIRE:-false}"
+    ports:
+      # APP_PORT permite publicar em outra porta sem editar este arquivo,
+      # quando a 8080 do host já estiver ocupada.
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      db:
+        # A aplicação termina se o banco não responder no boot
+        # (src/models/post.js:59 — sync sem catch). Prontidão real, não sleep.
+        condition: service_healthy
+    networks:
+      - kube-news
+
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_DATABASE:-kubedevnews}"
+      POSTGRES_USER: "${DB_USERNAME:-kubedevnews}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-Pg#123}"
+    volumes:
+      # Postgres 18+ mudou o layout: o ponto de montagem é /var/lib/postgresql,
+      # e o dado vai para o subdiretório por versão maior (/var/lib/postgresql/18/docker).
+      # Montar em /var/lib/postgresql/data — a convenção até a 17 — falha de dois
+      # jeitos: com dado antigo o container recusa subir, e com volume vazio ele
+      # sobe normalmente gravando FORA do volume, sem persistir e sem avisar.
+      - pgdata18:/var/lib/postgresql
+    healthcheck:
+      # -U e -d são obrigatórios: sem eles o pg_isready responde pelo banco
+      # padrão do serviço e fica pronto antes de o banco da aplicação existir.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-kubedevnews} -d ${DB_DATABASE:-kubedevnews}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    ports:
+      # Publicado só no loopback — a aplicação alcança o banco pela rede do compose.
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+    networks:
+      - kube-news
+
+volumes:
+  # Nome novo, e não reaproveitamento do `pgdata` anterior: aquele volume foi
+  # inicializado por uma versão anterior do Postgres e não é legível pela 18.
+  # Reusar o nome exigiria destruir dado de outra sessão sem confirmação.
+  pgdata18:
+
+networks:
+  kube-news:
